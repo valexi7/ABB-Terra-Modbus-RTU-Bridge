@@ -75,3 +75,7 @@ and connected to the charger’s **RS-485 A/B** terminals.
 ### 🧩 Terra Config Modbus Settings
 Adjust the charger's Modbus settings with Terra Config app according to the picture:
 ![Modbus settings for the charger](/media/TerraConfig_modbus_settings.jpg)
+---
+### 🧩 Modbus RTU Bridge In Action
+Finally The Modbus RTU bridge is now fully operational and actively supporting our in-phase load balancing system.
+![Modbus RTU bridge in action](/media/modbus-rtu-bridge-in-action.png)
