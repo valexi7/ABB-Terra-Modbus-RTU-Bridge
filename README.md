@@ -22,7 +22,7 @@ With this project, the live phase data is transmitted wirelessly via Wi-Fi from 
 |------------|----------|-------|
 | **Lolin32 Lite** | ESP32 controller running ESPHome | Powered from charger’s 3.3 V rail (or VIN 5 V) |
 | **RS-485 transceiver** | Modbus RTU physical layer | Auto-flow type (MAX13487 / SP3485) |
-| **ABB Terra AC EV3 charger** | Modbus RTU master | Polls voltage/current/power registers |
+| **ABB Terra AC charger** | Modbus RTU master | Polls voltage/current/power registers |
 | **Home Assistant + HomeWizard P1** | Data source | Provides real energy and phase data via API |
 
 ### Wiring summary
