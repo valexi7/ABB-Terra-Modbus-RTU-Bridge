@@ -15,6 +15,21 @@ Running a long Modbus RS-485 cable between them would be impractical.
 With this project, the live phase data is transmitted wirelessly via Wi-Fi from Home Assistant, and the ESP32 converts it locally into a Modbus RTU signal inside the charger — eliminating the need for any long communication wiring.
 
 ---
+## 📡 System Architecture
+
+The diagram below illustrates how data flows wirelessly from the **HomeWizard P1** smart meter through **Home Assistant** to the **ESP32 Modbus RTU bridge**, which then provides a wired **RS-485** Modbus connection to the **ABB Terra AC** charger.
+
+![HomeWizard P1 to ABB Terra AC](../media/HomeWizard%20P1%20to%20ABB%20Terra%20AC.png)
+
+1. **HomeWizard P1** → sends live power and energy data to Home Assistant via Wi-Fi.  
+2. **Home Assistant** → serves those values over ESPHome API.  
+3. **ESP32 bridge (Lolin32 Lite)** → emulates an ABB EV3 meter on Modbus RTU.  
+4. **ABB Terra AC charger** → receives those values via RS-485 and performs smart charging.
+
+> 💡 Typically, the actual electricity meter is installed in the **main electrical panel (sähkökeskus)** inside the house, while the charger is in the **garage**.  
+> Running a long Modbus cable between them would be impractical — this setup transmits data **wirelessly** and converts it to Modbus **locally inside the charger**.
+
+---
 
 ## 🛠️ Hardware
 
