@@ -1,4 +1,4 @@
-# Modbus RTU Bridge for ABB Terra AC EV3 Charger
+# Modbus RTU Bridge for ABB Terra AC Charger
 **Powered by ESPHome on Lolin32 Lite (ESP32)**  
 Bridges Home Assistant energy data (HomeWizard P1) into Modbus RTU for the ABB Terra AC EV3 charger.
 
