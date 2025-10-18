@@ -26,9 +26,6 @@ The diagram below illustrates how data flows wirelessly from the **HomeWizard P1
 3. **ESP32 bridge (Lolin32 Lite)** → emulates an ABB EV3 meter on Modbus RTU.  
 4. **ABB Terra AC charger** → receives those values via RS-485 and performs smart charging.
 
-> 💡 Typically, the actual electricity meter is installed in the **main electrical panel (sähkökeskus)** inside the house, while the charger is in the **garage**.  
-> Running a long Modbus cable between them would be impractical — this setup transmits data **wirelessly** and converts it to Modbus **locally inside the charger**.
-
 ---
 
 ## 🛠️ Hardware
