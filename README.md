@@ -73,5 +73,5 @@ and connected to the charger’s **RS-485 A/B** terminals.
 - **RS485 A+ / B−** → differential Modbus lines connected to the charger.
 ---
 ### 🧩 Terra Config Modbus Settings
-Adjust the chargers Modbus settings with Terra Config app according to the picture:
+Adjust the charger's Modbus settings with Terra Config app according to the picture:
 ![Modbus settings for the charger](/media/TerraConfig_modbus_settings.jpg)
