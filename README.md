@@ -51,7 +51,23 @@ The diagram below illustrates how data flows wirelessly from the **HomeWizard P1
 ### 🧰 Visual Wiring Diagram
 
 ![Wiring diagram for Lolin32 Lite and RS-485 module](/media/wiring-diagram.png)
+**Boot stability fix:**  
+To ensure reliable startup when the ABB Terra AC charger powers up after a power outage,  
+place a **10 µF electrolytic or tantalum capacitor** between the **EN** and **GND** pins on the Lolin32 Lite.  
 
+This adds a short (~100 ms) power-on delay, giving the 3.3 V rail time to stabilize and preventing the ESP32 from entering a brownout or hung boot state during transient voltage drops.
 The ESP32 runs as **Modbus server (slave)** on **address 0x01**, 9600 baud, 8E1.
 
 ---
+### 🧩 System Integration Inside ABB Terra AC
+
+Below is an example installation inside the **ABB Terra AC** charger enclosure.  
+The **Lolin32 Lite** and RS-485 transceiver are powered directly from the **3.3 V JTAG header**,  
+and connected to the charger’s **RS-485 A/B** terminals.
+
+![System setup inside ABB Terra AC](/media/system-setup.png)
+
+**Connections shown:**
+- **JTAG – 3V3** → powers both the ESP32 and RS-485 board.  
+- **JTAG – GND** → common ground.  
+- **RS485 A+ / B−** → differential Modbus lines connected to the charger.
