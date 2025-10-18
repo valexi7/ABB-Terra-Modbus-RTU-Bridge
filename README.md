@@ -37,7 +37,7 @@ The diagram below illustrates how data flows wirelessly from the **HomeWizard P1
 | **ABB Terra AC charger** | Modbus RTU master | Polls voltage/current/power registers |
 | **Home Assistant + HomeWizard P1** | Data source | Provides real energy and phase data via API |
 
-### Wiring summary
+### ⚡ Hardware Wiring
 
 | Lolin32 Lite pin | RS-485 module | Description | ABB Terra AC connection |
 |------------------|---------------|--------------|--------------------------|
@@ -48,7 +48,9 @@ The diagram below illustrates how data flows wirelessly from the **HomeWizard P1
 
 > 💡 The ABB Terra AC charger exposes its internal Modbus interface on **plug A** (pins 1 = TX, 2 = RX).  
 > The ESP32 is powered directly from the charger’s **3.3 V and GND** available on the **JTAG header**, eliminating the need for an external power supply.
+### 🧰 Visual Wiring Diagram
 
+![Wiring diagram for Lolin32 Lite and RS-485 module](/media/wiring-diagram.png)
 
 The ESP32 runs as **Modbus server (slave)** on **address 0x01**, 9600 baud, 8E1.
 
