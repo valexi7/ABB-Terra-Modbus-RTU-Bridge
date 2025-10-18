@@ -71,3 +71,7 @@ and connected to the charger’s **RS-485 A/B** terminals.
 - **JTAG – 3V3** → powers both the ESP32 and RS-485 board.  
 - **JTAG – GND** → common ground.  
 - **RS485 A+ / B−** → differential Modbus lines connected to the charger.
+---
+### 🧩 Terra Config Modbus Settings
+Adjust the chargers Modbus settings with Terra Config app according to the picture:
+![Modbus settings for the charger](/media/TerraConfig_modbus_settings.jpg)
