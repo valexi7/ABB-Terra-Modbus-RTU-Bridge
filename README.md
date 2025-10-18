@@ -10,8 +10,8 @@ It exposes voltage, current, power, energy, and power factor registers compatibl
 Values are pulled live from Home Assistant sensors (e.g. HomeWizard P1 smart meter).
 
 The goal: allow the ABB Terra AC charger to operate in **Smart Charging / Dynamic Load Balancing mode** without an actual ABB EV3 meter, using P1 data instead.
-In a typical installation, the electricity meter is located in the **main distribution board** (Finnish: *sähkökeskus*), while the EV charger is installed in a **garage** or **outbuilding**.  
-Running a long Modbus RS-485 cable between them would be impractical and costly.  
+In a typical installation, the electricity meter is located in the **main distribution board**, while the EV charger is installed in a **garage** or **outbuilding**.  
+Running a long Modbus RS-485 cable between them would be impractical.  
 With this project, the live phase data is transmitted wirelessly via Wi-Fi from Home Assistant, and the ESP32 converts it locally into a Modbus RTU signal inside the charger — eliminating the need for any long communication wiring.
 
 ---
@@ -29,8 +29,8 @@ With this project, the live phase data is transmitted wirelessly via Wi-Fi from 
 
 | Lolin32 Lite pin | RS-485 module | Description | ABB Terra AC connection |
 |------------------|---------------|--------------|--------------------------|
-| **GPIO17 (TX)** | DI | Modbus TX | Plug A, **slot 1 (TX)** |
-| **GPIO16 (RX)** | RO | Modbus RX | Plug A, **slot 2 (RX)** |
+| **GPIO17 (TX)** | TXD | Modbus TX | Plug A, **slot 1 (TX)** |
+| **GPIO16 (RX)** | RXD | Modbus RX | Plug A, **slot 2 (RX)** |
 | **3V3** | VCC | Power | JTAG connector **3V3** pin |
 | **GND** | GND | Common ground | JTAG connector **GND** pin |
 
