@@ -19,7 +19,7 @@ With this project, the live phase data is transmitted wirelessly via Wi-Fi from 
 
 The diagram below illustrates how data flows wirelessly from the **HomeWizard P1** smart meter through **Home Assistant** to the **ESP32 Modbus RTU bridge**, which then provides a wired **RS-485** Modbus connection to the **ABB Terra AC** charger.
 
-![HomeWizard P1 to ABB Terra AC](../media/HomeWizard%20P1%20to%20ABB%20Terra%20AC.png)
+![HomeWizard P1 to ABB Terra AC](/media/HomeWizard%20P1%20to%20ABB%20Terra%20AC.png)
 
 1. **HomeWizard P1** → sends live power and energy data to Home Assistant via Wi-Fi.  
 2. **Home Assistant** → serves those values over ESPHome API.  
