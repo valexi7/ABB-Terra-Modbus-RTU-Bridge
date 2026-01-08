@@ -1,0 +1,558 @@
+esphome:
+  name: modbus-rtu-bridge-lolin32-lite
+  friendly_name: modbus-rtu-bridge-lolin32-lite
+  comment: "ABB Terra AC EV3-compat Modbus RTU slave fed from HomeWizard P1 via HA"
+
+esp32:
+  board: lolin32_lite
+  framework:
+    type: ESP-IDF
+    sdkconfig_options:
+      # Turn OFF brownout detector for ESP32 target
+      CONFIG_ESP32_BROWNOUT_DET: "n"
+      # (Optional) If you want it ON but less sensitive, use one of these instead:
+      # CONFIG_ESP32_BROWNOUT_DET: "y"
+      # CONFIG_ESP32_BROWNOUT_DET_LVL_SEL_2_4V: "y"   # ~2.4V
+      # CONFIG_ESP32_BROWNOUT_DET_LVL_SEL_2_5V: "y"
+      # CONFIG_ESP32_BROWNOUT_DET_LVL_SEL_2_6V: "y"
+      # ... (only one *_LVL_SEL_* may be "y")
+
+
+# OTA + API (so you can update wirelessly and pull HA states)
+# Home Assistant API / OTA
+api:
+#  encryption:
+#    key: "#Generateyourencryptionkey"
+ota:
+  - platform: esphome
+#    password: "your_ota_password_here"
+
+logger:
+  level: INFO
+  baud_rate: 0    # Disable serial logging (keeps pins free)
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Terra-Modbus-Bridge"
+    password: "yourfallbackpassword"
+    
+captive_portal:
+
+# Built-in ESPHome web UI (shows all entities)
+web_server:
+  port: 80
+  include_internal: true
+  local: true
+
+# ---------- UART + Modbus RTU "server" (slave) ----------
+uart:
+  id: uart_bus
+  tx_pin: GPIO17 #UART TX pin -> RXD of RS-485 board
+  rx_pin: GPIO16 #UART RX pin -> TXD of RS-485 board
+  baud_rate: 9600
+  stop_bits: 1
+  parity: EVEN
+
+# For debugging. Comment out to hide RX/TX trails
+  #  debug:
+  #    direction: BOTH       # log both TX and RX
+  #    dummy_receiver: false
+  #    after:
+  #      delimiter: "\n"
+  #    sequence:
+  #      - lambda: |-
+  #          char msg[128];
+  #          int pos = 0;
+  #          pos += snprintf(msg + pos, sizeof(msg) - pos, "%s: ",
+  #                          direction == uart::UART_DIRECTION_TX ? "TX" : "RX");
+  #          for (auto c : bytes) {
+  #            if (pos > (int)sizeof(msg) - 4) break;  // prevent overflow
+  #            pos += snprintf(msg + pos, sizeof(msg) - pos, "%02X ", c);
+  #          }
+  #          ESP_LOGI("uart_hex", "%s", msg);
+
+modbus:
+  id: rs485
+  uart_id: uart_bus
+  role: server
+  # flow_control_pin: GPIO2   # ensure HIGH at boot; add pull-up if needed, no needed with AUTO flow control boards.
+
+modbus_controller:
+  - id: mb_server
+    modbus_id: rs485
+    address: 0x01         # EV3 default slave ID
+
+    server_registers:
+      # Energy import (kWh -> 0.01 kWh), U_QWORD at 0x5000 (covers 0x5000..0x5003)
+      - address: 0x5000
+        value_type: U_QWORD
+        read_lambda: |-
+          uint64_t val = 0;
+          if (!isnan(id(p1_energy_import).state)) {
+            val = (uint64_t)(id(p1_energy_import).state * 100.0f);
+          }
+          id(reg_reads_energy) += 1;
+          ESP_LOGI("mb_server", "READ 0x5000..0x5003 -> 0x%016llX (%llu)",
+                  (unsigned long long)val, (unsigned long long)val);
+          id(last_read_event).publish_state("0x5000");
+          return val;
+
+      # Energy export (kWh -> 0.01 kWh), U_QWORD at 0x5004 (0x5004..0x5007)
+      - address: 0x5004
+        value_type: U_QWORD
+        read_lambda: |-
+          uint64_t val = 0;
+          if (!isnan(id(p1_energy_export).state)) {
+            val = (uint64_t)(id(p1_energy_export).state * 100.0f);
+          }
+          ESP_LOGI("mb_server", "READ 0x5004..0x5007 -> 0x%016llX (%llu)",
+                  (unsigned long long)val, (unsigned long long)val);
+          id(last_read_event).publish_state("0x5004");
+          return val;
+
+      # Voltages (V -> 0.1V) U_DWORDs at 0x5B00/02/04
+      - address: 0x5B00
+        value_type: U_DWORD
+        read_lambda: |-
+          uint32_t v = isnan(id(p1_voltage_l1).state) ? 0 : (uint32_t)(id(p1_voltage_l1).state * 10.0f);
+          id(reg_reads_v_l1) += 1;
+          ESP_LOGI("mb_server", "READ 0x5B00 -> 0x%08X (%u)", v, v);
+          id(last_read_event).publish_state("0x5B00");
+          return v;
+
+      - address: 0x5B02
+        value_type: U_DWORD
+        read_lambda: |-
+          uint32_t v = isnan(id(p1_voltage_l2).state) ? 0 : (uint32_t)(id(p1_voltage_l2).state * 10.0f);
+          id(reg_reads_v_l2) += 1;
+          ESP_LOGI("mb_server", "READ 0x5B02 -> 0x%08X (%u)", v, v);
+          id(last_read_event).publish_state("0x5B02");
+          return v;
+
+      - address: 0x5B04
+        value_type: U_DWORD
+        read_lambda: |-
+          uint32_t v = isnan(id(p1_voltage_l3).state) ? 0 : (uint32_t)(id(p1_voltage_l3).state * 10.0f);
+          id(reg_reads_v_l3) += 1;
+          ESP_LOGI("mb_server", "READ 0x5B04 -> 0x%08X (%u)", v, v);
+          id(last_read_event).publish_state("0x5B04");
+          return v;
+
+      # Currents (A -> 0.01A) U_DWORDs at 0x5B0C/0E/10
+      - address: 0x5B0C
+        value_type: U_DWORD
+        read_lambda: |-
+          uint32_t a = isnan(id(p1_current_l1).state) ? 0 : (uint32_t)(id(p1_current_l1).state * 100.0f);
+          id(reg_reads_i_l1) += 1;
+          ESP_LOGI("mb_server", "READ 0x5B0C -> 0x%08X (%u)", a, a);
+          id(last_read_event).publish_state("0x5B0C");
+          return a;
+
+      - address: 0x5B0E
+        value_type: U_DWORD
+        read_lambda: |-
+          uint32_t a = isnan(id(p1_current_l2).state) ? 0 : (uint32_t)(id(p1_current_l2).state * 100.0f);
+          id(reg_reads_i_l2) += 1;
+          ESP_LOGI("mb_server", "READ 0x5B0E -> 0x%08X (%u)", a, a);
+          id(last_read_event).publish_state("0x5B0E");
+          return a;
+
+      - address: 0x5B10
+        value_type: U_DWORD
+        read_lambda: |-
+          uint32_t a = isnan(id(p1_current_l3).state) ? 0 : (uint32_t)(id(p1_current_l3).state * 100.0f);
+          id(reg_reads_i_l3) += 1;
+          ESP_LOGI("mb_server", "READ 0x5B10 -> 0x%08X (%u)", a, a);
+          id(last_read_event).publish_state("0x5B10");
+          return a;
+
+
+      # Active power (W -> 0.01W) S_DWORDs at 0x5B14/16/18/1A
+      - address: 0x5B14
+        value_type: S_DWORD
+        read_lambda: |-
+          float w = isnan(id(p1_power_total).state) ? 0.0f : id(p1_power_total).state;
+          int32_t v = (int32_t)(w * 100.0f);
+          id(reg_reads_p_tot) += 1;
+          ESP_LOGI("mb_server", "READ 0x5B14 -> 0x%08X (%d)", (uint32_t)v, v);
+          id(last_read_event).publish_state("0x5B14");
+          return v;
+
+      - address: 0x5B16
+        value_type: S_DWORD
+        read_lambda: |-
+          float w = isnan(id(p1_power_l1).state) ? 0.0f : id(p1_power_l1).state;
+          int32_t v = (int32_t)(w * 100.0f);
+          id(reg_reads_p_l1) += 1;
+          ESP_LOGI("mb_server", "READ 0x5B16 -> 0x%08X (%d)", (uint32_t)v, v);
+          id(last_read_event).publish_state("0x5B16");
+          return v;
+
+      - address: 0x5B18
+        value_type: S_DWORD
+        read_lambda: |-
+          float w = isnan(id(p1_power_l2).state) ? 0.0f : id(p1_power_l2).state;
+          int32_t v = (int32_t)(w * 100.0f);
+          id(reg_reads_p_l2) += 1;
+          ESP_LOGI("mb_server", "READ 0x5B18 -> 0x%08X (%d)", (uint32_t)v, v);
+          id(last_read_event).publish_state("0x5B18");
+          return v;
+
+      - address: 0x5B1A
+        value_type: S_DWORD
+        read_lambda: |-
+          float w = isnan(id(p1_power_l3).state) ? 0.0f : id(p1_power_l3).state;
+          int32_t v = (int32_t)(w * 100.0f);
+          id(reg_reads_p_l3) += 1;
+          ESP_LOGI("mb_server", "READ 0x5B1A -> 0x%08X (%d)", (uint32_t)v, v);
+          id(last_read_event).publish_state("0x5B1A");
+          return v;
+
+      # -------- Power Factor (U_WORD, ×0.001) --------
+      # 0x5B3A Total PF
+      - address: 0x5B3A
+        value_type: U_WORD
+        read_lambda: |-
+          // PF_total = |P_total| / sum(V*I) using per-phase V (LN) and I
+          float vt1 = id(p1_voltage_l1).state, it1 = id(p1_current_l1).state, pt1 = id(p1_power_l1).state;
+          float vt2 = id(p1_voltage_l2).state, it2 = id(p1_current_l2).state, pt2 = id(p1_power_l2).state;
+          float vt3 = id(p1_voltage_l3).state, it3 = id(p1_current_l3).state, pt3 = id(p1_power_l3).state;
+          float denom = 0.0f;
+          if (!isnan(vt1) && !isnan(it1)) denom += vt1 * it1;
+          if (!isnan(vt2) && !isnan(it2)) denom += vt2 * it2;
+          if (!isnan(vt3) && !isnan(it3)) denom += vt3 * it3;
+          float p_total = id(p1_power_total).state;
+          float pf = (isnan(p_total) || denom <= 0.0f) ? 0.0f : fabsf(p_total) / denom;
+          if (pf > 1.0f) pf = 1.0f;
+          uint16_t raw = (uint16_t) lroundf(pf * 1000.0f);
+          ESP_LOGI("mb_server", "READ 0x5B3A -> 0x%04X (%u)", raw, raw);
+          id(last_read_event).publish_state("0x5B3A");
+          return raw;
+
+      # 0x5B3B L1 PF
+      - address: 0x5B3B
+        value_type: U_WORD
+        read_lambda: |-
+          float v = id(p1_voltage_l1).state, i = id(p1_current_l1).state, p = id(p1_power_l1).state;
+          float pf = (isnan(v) || isnan(i) || isnan(p) || v <= 0.0f || i <= 0.0f) ? 0.0f : fabsf(p) / (v * i);
+          if (pf > 1.0f) pf = 1.0f;
+          uint16_t raw = (uint16_t) lroundf(pf * 1000.0f);
+          ESP_LOGI("mb_server", "READ 0x5B3B -> 0x%04X (%u)", raw, raw);
+          id(last_read_event).publish_state("0x5B3B");
+          return raw;
+
+      # 0x5B3C L2 PF
+      - address: 0x5B3C
+        value_type: U_WORD
+        read_lambda: |-
+          float v = id(p1_voltage_l2).state, i = id(p1_current_l2).state, p = id(p1_power_l2).state;
+          float pf = (isnan(v) || isnan(i) || isnan(p) || v <= 0.0f || i <= 0.0f) ? 0.0f : fabsf(p) / (v * i);
+          if (pf > 1.0f) pf = 1.0f;
+          uint16_t raw = (uint16_t) lroundf(pf * 1000.0f);
+          ESP_LOGI("mb_server", "READ 0x5B3C -> 0x%04X (%u)", raw, raw);
+          id(last_read_event).publish_state("0x5B3C");
+          return raw;
+
+      # 0x5B3D L3 PF
+      - address: 0x5B3D
+        value_type: U_WORD
+        read_lambda: |-
+          float v = id(p1_voltage_l3).state, i = id(p1_current_l3).state, p = id(p1_power_l3).state;
+          float pf = (isnan(v) || isnan(i) || isnan(p) || v <= 0.0f || i <= 0.0f) ? 0.0f : fabsf(p) / (v * i);
+          if (pf > 1.0f) pf = 1.0f;
+          uint16_t raw = (uint16_t) lroundf(pf * 1000.0f);
+          ESP_LOGI("mb_server", "READ 0x5B3D -> 0x%04X (%u)", raw, raw);
+          id(last_read_event).publish_state("0x5B3D");
+          return raw;
+
+
+# ---------- Home Assistant sources (your entities) ----------
+sensor:
+  - platform: homeassistant
+    id: p1_energy_import
+    entity_id: sensor.p1_meter_energy_import
+  - platform: homeassistant
+    id: p1_energy_export
+    entity_id: sensor.p1_meter_energy_export
+  - platform: homeassistant
+    id: p1_power_total
+    entity_id: sensor.p1_meter_power
+  - platform: homeassistant
+    id: p1_power_l1
+    entity_id: sensor.p1_meter_power_phase_1
+  - platform: homeassistant
+    id: p1_power_l2
+    entity_id: sensor.p1_meter_power_phase_2
+  - platform: homeassistant
+    id: p1_power_l3
+    entity_id: sensor.p1_meter_power_phase_3
+  - platform: homeassistant
+    id: p1_voltage_l1
+    entity_id: sensor.p1_meter_voltage_phase_1
+  - platform: homeassistant
+    id: p1_voltage_l2
+    entity_id: sensor.p1_meter_voltage_phase_2
+  - platform: homeassistant
+    id: p1_voltage_l3
+    entity_id: sensor.p1_meter_voltage_phase_3
+  - platform: homeassistant
+    id: p1_current_total
+    entity_id: sensor.p1_meter_current
+  - platform: homeassistant
+    id: p1_current_l1
+    entity_id: sensor.p1_meter_current_phase_1
+  - platform: homeassistant
+    id: p1_current_l2
+    entity_id: sensor.p1_meter_current_phase_2
+  - platform: homeassistant
+    id: p1_current_l3
+    entity_id: sensor.p1_meter_current_phase_3
+  # --- WiFi link quality (for web/debug) ---
+  - platform: wifi_signal
+    id: wifi_rssi
+    name: "WiFi Signal (dBm)"
+    device_class: signal_strength
+    update_interval: 30s
+
+  - platform: template
+    name: "WiFi Signal (%)"
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    update_interval: 30s
+    lambda: |-
+      if (isnan(id(wifi_rssi).state)) return NAN;
+      float rssi = id(wifi_rssi).state;   // in dBm
+      // Map -100..-50 dBm to 0..100% (clamped)
+      if (rssi <= -100) return 0;
+      if (rssi >= -50)  return 100;
+      return (int) (2 * (rssi + 100));
+    # Optional smoothing to avoid jitter:
+    filters:
+      - sliding_window_moving_average:
+          window_size: 5
+          send_every: 1
+
+  # - platform: template
+    # name: "Reads Energy (0x5000/0x5004)"
+    # lambda: |-
+      # return (float) id(reg_reads_energy);
+    # update_interval: 10s
+  # - platform: template
+    # name: "Reads V L1 (0x5B00)"
+    # lambda: "return (float) id(reg_reads_v_l1);"
+    # update_interval: 10s
+  # - platform: template
+    # name: "Reads V L2 (0x5B02)"
+    # lambda: "return (float) id(reg_reads_v_l2);"
+    # update_interval: 10s
+  # - platform: template
+    # name: "Reads V L3 (0x5B04)"
+    # lambda: "return (float) id(reg_reads_v_l3);"
+    # update_interval: 10s
+  # - platform: template
+    # name: "Reads I L1 (0x5B0C)"
+    # lambda: "return (float) id(reg_reads_i_l1);"
+    # update_interval: 10s
+  # - platform: template
+    # name: "Reads I L2 (0x5B0E)"
+    # lambda: "return (float) id(reg_reads_i_l2);"
+    # update_interval: 10s
+  # - platform: template
+    # name: "Reads I L3 (0x5B10)"
+    # lambda: "return (float) id(reg_reads_i_l3);"
+    # update_interval: 10s
+  # - platform: template
+    # name: "Reads P total (0x5B14)"
+    # lambda: "return (float) id(reg_reads_p_tot);"
+    # update_interval: 10s
+  # - platform: template
+    # name: "Reads P L1 (0x5B16)"
+    # lambda: "return (float) id(reg_reads_p_l1);"
+    # update_interval: 10s
+  # - platform: template
+    # name: "Reads P L2 (0x5B18)"
+    # lambda: "return (float) id(reg_reads_p_l2);"
+    # update_interval: 10s
+  # - platform: template
+    # name: "Reads P L3 (0x5B1A)"
+    # lambda: "return (float) id(reg_reads_p_l3);"
+    # update_interval: 10s
+
+# -------------------- Debug counters --------------------
+globals:
+  - { id: reg_reads_energy, type: uint32_t, initial_value: '0' }
+  - { id: reg_reads_v_l1,  type: uint32_t, initial_value: '0' }
+  - { id: reg_reads_v_l2,  type: uint32_t, initial_value: '0' }
+  - { id: reg_reads_v_l3,  type: uint32_t, initial_value: '0' }
+  - { id: reg_reads_i_l1,  type: uint32_t, initial_value: '0' }
+  - { id: reg_reads_i_l2,  type: uint32_t, initial_value: '0' }
+  - { id: reg_reads_i_l3,  type: uint32_t, initial_value: '0' }
+  - { id: reg_reads_p_tot, type: uint32_t, initial_value: '0' }
+  - { id: reg_reads_p_l1,  type: uint32_t, initial_value: '0' }
+  - { id: reg_reads_p_l2,  type: uint32_t, initial_value: '0' }
+  - { id: reg_reads_p_l3,  type: uint32_t, initial_value: '0' }
+
+# -------------------- EV3 DISPLAY (hex + dec in state) + last-read --------------------
+text_sensor:
+  - platform: template
+    id: last_read_event
+    name: "Last Modbus Register Read"
+    update_interval: never
+
+  # Energy (64-bit, ×0.01 kWh)
+  - platform: template
+    name: "EV3 Energy Imported (raw ×0.01kWh) [0x5000]"
+    update_interval: 5s
+    lambda: |-
+      if (isnan(id(p1_energy_import).state)) return {};
+      uint64_t v = (uint64_t)(id(p1_energy_import).state * 100.0f);
+      char buf[40];
+      sprintf(buf, "0x%016llX %llu", (unsigned long long)v, (unsigned long long)v);
+      return std::string(buf);
+
+  - platform: template
+    name: "EV3 Energy Exported (raw ×0.01kWh) [0x5004]"
+    update_interval: 5s
+    lambda: |-
+      if (isnan(id(p1_energy_export).state)) return {};
+      uint64_t v = (uint64_t)(id(p1_energy_export).state * 100.0f);
+      char buf[40];
+      sprintf(buf, "0x%016llX %llu", (unsigned long long)v, (unsigned long long)v);
+      return std::string(buf);
+
+  # Voltages (unsigned 32-bit, ×0.1 V)
+  - platform: template
+    name: "EV3 Voltage L1 (raw ×0.1V) [0x5B00]"
+    update_interval: 5s
+    lambda: |-
+      if (isnan(id(p1_voltage_l1).state)) return {};
+      uint32_t v = (uint32_t)(id(p1_voltage_l1).state * 10.0f);
+      char buf[32]; sprintf(buf, "0x%08X %u", v, v); return std::string(buf);
+
+  - platform: template
+    name: "EV3 Voltage L2 (raw ×0.1V) [0x5B02]"
+    update_interval: 5s
+    lambda: |-
+      if (isnan(id(p1_voltage_l2).state)) return {};
+      uint32_t v = (uint32_t)(id(p1_voltage_l2).state * 10.0f);
+      char buf[32]; sprintf(buf, "0x%08X %u", v, v); return std::string(buf);
+
+  - platform: template
+    name: "EV3 Voltage L3 (raw ×0.1V) [0x5B04]"
+    update_interval: 5s
+    lambda: |-
+      if (isnan(id(p1_voltage_l3).state)) return {};
+      uint32_t v = (uint32_t)(id(p1_voltage_l3).state * 10.0f);
+      char buf[32]; sprintf(buf, "0x%08X %u", v, v); return std::string(buf);
+
+  # Currents (unsigned 32-bit, ×0.01 A)
+  - platform: template
+    name: "EV3 Current L1 (raw ×0.01A) [0x5B0C]"
+    update_interval: 5s
+    lambda: |-
+      if (isnan(id(p1_current_l1).state)) return {};
+      uint32_t v = (uint32_t)(id(p1_current_l1).state * 100.0f);
+      char buf[32]; sprintf(buf, "0x%08X %u", v, v); return std::string(buf);
+
+  - platform: template
+    name: "EV3 Current L2 (raw ×0.01A) [0x5B0E]"
+    update_interval: 5s
+    lambda: |-
+      if (isnan(id(p1_current_l2).state)) return {};
+      uint32_t v = (uint32_t)(id(p1_current_l2).state * 100.0f);
+      char buf[32]; sprintf(buf, "0x%08X %u", v, v); return std::string(buf);
+
+  - platform: template
+    name: "EV3 Current L3 (raw ×0.01A) [0x5B10]"
+    update_interval: 5s
+    lambda: |-
+      if (isnan(id(p1_current_l3).state)) return {};
+      uint32_t v = (uint32_t)(id(p1_current_l3).state * 100.0f);
+      char buf[32]; sprintf(buf, "0x%08X %u", v, v); return std::string(buf);
+
+  # Active power (signed 32-bit, ×0.01 W) — hex shown as 2’s complement
+  - platform: template
+    name: "EV3 Power Total (raw ×0.01W) [0x5B14]"
+    update_interval: 2s
+    lambda: |-
+      if (isnan(id(p1_power_total).state)) return {};
+      int32_t v = (int32_t)(id(p1_power_total).state * 100.0f);
+      char buf[32]; sprintf(buf, "0x%08X %d", (uint32_t)v, v); return std::string(buf);
+
+  - platform: template
+    name: "EV3 Power L1 (raw ×0.01W) [0x5B16]"
+    update_interval: 2s
+    lambda: |-
+      if (isnan(id(p1_power_l1).state)) return {};
+      int32_t v = (int32_t)(id(p1_power_l1).state * 100.0f);
+      char buf[32]; sprintf(buf, "0x%08X %d", (uint32_t)v, v); return std::string(buf);
+
+  - platform: template
+    name: "EV3 Power L2 (raw ×0.01W) [0x5B18]"
+    update_interval: 2s
+    lambda: |-
+      if (isnan(id(p1_power_l2).state)) return {};
+      int32_t v = (int32_t)(id(p1_power_l2).state * 100.0f);
+      char buf[32]; sprintf(buf, "0x%08X %d", (uint32_t)v, v); return std::string(buf);
+
+  - platform: template
+    name: "EV3 Power L3 (raw ×0.01W) [0x5B1A]"
+    update_interval: 2s
+    lambda: |-
+      if (isnan(id(p1_power_l3).state)) return {};
+      int32_t v = (int32_t)(id(p1_power_l3).state * 100.0f);
+      char buf[32]; sprintf(buf, "0x%08X %d", (uint32_t)v, v); return std::string(buf);
+
+  # Power Factor display rows (×0.001)
+  - platform: template
+    name: "EV3 Power Factor Total (raw ×0.001) [0x5B3A]"
+    update_interval: 5s
+    lambda: |-
+      float vt1 = id(p1_voltage_l1).state, it1 = id(p1_current_l1).state;
+      float vt2 = id(p1_voltage_l2).state, it2 = id(p1_current_l2).state;
+      float vt3 = id(p1_voltage_l3).state, it3 = id(p1_current_l3).state;
+      float denom = 0.0f;
+      if (!isnan(vt1) && !isnan(it1)) denom += vt1 * it1;
+      if (!isnan(vt2) && !isnan(it2)) denom += vt2 * it2;
+      if (!isnan(vt3) && !isnan(it3)) denom += vt3 * it3;
+      float p_total = id(p1_power_total).state;
+      float pf = (isnan(p_total) || denom <= 0.0f) ? 0.0f : fabsf(p_total) / denom;
+      if (pf > 1.0f) pf = 1.0f;
+      uint16_t raw = (uint16_t) lroundf(pf * 1000.0f);
+      char buf[24]; sprintf(buf, "0x%04X %u", raw, raw);
+      return std::string(buf);
+
+  - platform: template
+    name: "EV3 Power Factor L1 (raw ×0.001) [0x5B3B]"
+    update_interval: 5s
+    lambda: |-
+      float v = id(p1_voltage_l1).state, i = id(p1_current_l1).state, p = id(p1_power_l1).state;
+      float pf = (isnan(v) || isnan(i) || isnan(p) || v <= 0.0f || i <= 0.0f) ? 0.0f : fabsf(p) / (v * i);
+      if (pf > 1.0f) pf = 1.0f;
+      uint16_t raw = (uint16_t) lroundf(pf * 1000.0f);
+      char buf[24]; sprintf(buf, "0x%04X %u", raw, raw);
+      return std::string(buf);
+
+  - platform: template
+    name: "EV3 Power Factor L2 (raw ×0.001) [0x5B3C]"
+    update_interval: 5s
+    lambda: |-
+      float v = id(p1_voltage_l2).state, i = id(p1_current_l2).state, p = id(p1_power_l2).state;
+      float pf = (isnan(v) || isnan(i) || isnan(p) || v <= 0.0f || i <= 0.0f) ? 0.0f : fabsf(p) / (v * i);
+      if (pf > 1.0f) pf = 1.0f;
+      uint16_t raw = (uint16_t) lroundf(pf * 1000.0f);
+      char buf[24]; sprintf(buf, "0x%04X %u", raw, raw);
+      return std::string(buf);
+
+  - platform: template
+    name: "EV3 Power Factor L3 (raw ×0.001) [0x5B3D]"
+    update_interval: 5s
+    lambda: |-
+      float v = id(p1_voltage_l3).state, i = id(p1_current_l3).state, p = id(p1_power_l3).state;
+      float pf = (isnan(v) || isnan(i) || isnan(p) || v <= 0.0f || i <= 0.0f) ? 0.0f : fabsf(p) / (v * i);
+      if (pf > 1.0f) pf = 1.0f;
+      uint16_t raw = (uint16_t) lroundf(pf * 1000.0f);
+      char buf[24]; sprintf(buf, "0x%04X %u", raw, raw);
+      return std::string(buf);
