@@ -1,6 +1,8 @@
 # Modbus RTU Bridge for ABB Terra AC Charger
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate/?business=DS47TSR4VGKFL&no_recurring=0&item_name=Tech+is+a+playground+for+solving+real-world+problems+and+building+tools+that+make+life+easier+for+others.&currency_code=EUR)
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/valexi)
+
+
 **Powered by ESPHome on Lolin32 Lite (ESP32)**  
 Bridges Home Assistant energy data (HomeWizard P1) into Modbus RTU for the ABB Terra AC charger.
 
